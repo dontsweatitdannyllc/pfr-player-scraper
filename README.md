@@ -1,114 +1,203 @@
-# Pro Football Reference Player Scraper
+# Pro Football Reference Player Scraper (AWS Scalable Pipeline)
 
-Scrapes player statistics from Pro-Football-Reference using FlareSolverr to bypass Cloudflare protections.
+A scalable scraping pipeline for collecting player statistics from **Pro-Football-Reference** using **FlareSolverr** to bypass Cloudflare protections.
 
-## Features
-- Fetch full player stat tables (passing, rushing, receiving, defense, etc.)
-- Uses FlareSolverr Docker service
-- Outputs structured JSON
-- Designed for AWS hosting (EC2 / ECS)
+Designed to run on **AWS ECS Fargate** with **SQS for job distribution** and **S3 for storage**.
 
-## Stack
-- Python 3.11
-- requests
-- BeautifulSoup
-- FlareSolverr
+---
 
-## Setup
+# Architecture
 
-### 1. Run FlareSolverr
+Pipeline flow:
 
-```bash
-docker run -d -p 8191:8191 --name flaresolverr ghcr.io/flaresolverr/flaresolverr:latest
+Player URL
+↓
+SQS Queue
+↓
+ECS Fargate Scraper Workers
+↓
+FlareSolverr Service
+↓
+S3 JSON Storage
+
+This architecture allows you to scale horizontally by increasing the number of scraper workers.
+
+Example scaling:
+
+- 10 workers → 10 concurrent scrapes
+- 100 workers → 100 concurrent scrapes
+
+---
+
+# Components
+
+## FlareSolverr
+
+Handles Cloudflare challenges.
+
+Container image:
+
+```
+ghcr.io/flaresolverr/flaresolverr:latest
 ```
 
-### 2. Install dependencies
+Runs as an ECS service or task.
 
-```bash
+Workers send requests to:
+
+```
+http://flaresolverr:8191/v1
+```
+
+---
+
+## Scraper Worker
+
+Consumes player URLs from SQS and performs:
+
+1. Fetch page through FlareSolverr
+2. Parse stat tables
+3. Upload structured JSON to S3
+
+Worker file:
+
+```
+worker.py
+```
+
+---
+
+# Repository Structure
+
+```
+pfr-player-scraper
+│
+├── scraper.py
+├── worker.py
+├── enqueue_players.py
+├── requirements.txt
+├── Dockerfile
+│
+├── aws
+│   └── ecs
+│       ├── flaresolverr-task.json
+│       └── scraper-task.json
+│
+└── README.md
+```
+
+---
+
+# Local Development
+
+Start FlareSolverr locally:
+
+```
+docker run -d -p 8191:8191 ghcr.io/flaresolverr/flaresolverr
+```
+
+Install dependencies:
+
+```
 pip install -r requirements.txt
 ```
 
-### 3. Run scraper
+Run scraper manually:
 
-```bash
+```
 python scraper.py https://www.pro-football-reference.com/players/B/BradTo00.htm
 ```
 
-## Output
+Output:
 
-JSON file with all parsed stat tables.
+```
+BradTo00.json
+```
 
-## AWS Deployment
+---
 
-Recommended:
-- EC2 instance
-- Docker for FlareSolverr
-- Python service for scraping
+# AWS Deployment
 
+## 1 Build Docker Image
 
-## AWS Fargate Deployment
-
-1. Build image
 ```
 docker build -t pfr-scraper .
 ```
 
-2. Push to ECR
+---
+
+## 2 Create ECR Repository
+
 ```
 aws ecr create-repository --repository-name pfr-scraper
+```
 
-aws ecr get-login-password --region <region> |
-  docker login --username AWS --password-stdin <account>.dkr.ecr.<region>.amazonaws.com
+Login to ECR:
 
+```
+aws ecr get-login-password --region <region> | \
+ docker login --username AWS --password-stdin <account>.dkr.ecr.<region>.amazonaws.com
+```
 
+Tag image:
+
+```
 docker tag pfr-scraper:latest <account>.dkr.ecr.<region>.amazonaws.com/pfr-scraper:latest
+```
 
+Push image:
+
+```
 docker push <account>.dkr.ecr.<region>.amazonaws.com/pfr-scraper:latest
 ```
 
-3. Register ECS tasks
-```
-aws ecs register-task-definition --cli-input-json file://aws/ecs/flaresolverr-task.json
-aws ecs register-task-definition --cli-input-json file://aws/ecs/scraper-task.json
-```
+---
 
-4. Run workers
-```
-aws ecs run-task --cluster scraper-cluster --launch-type FARGATE --task-definition pfr-scraper
-```
+# ECS Task Definitions
 
-
-## Queue + Storage Architecture
-
-Scraping pipeline:
-
-player URL
-   ↓
-SQS queue
-   ↓
-ECS scraper workers
-   ↓
-FlareSolverr
-   ↓
-S3 JSON storage
-
-### Environment variables
-
-Required for worker:
-
-SQS_QUEUE_URL=<queue>
-S3_BUCKET=<bucket>
-AWS_REGION=<region>
-
-### Example: enqueue players
+Located in:
 
 ```
-cat player_urls.txt | python enqueue_players.py $SQS_QUEUE_URL
+aws/ecs/
 ```
 
-### S3 Output
+Register tasks:
 
-Objects stored as:
+```
+aws ecs register-task-definition \
+--cli-input-json file://aws/ecs/flaresolverr-task.json
+
+aws ecs register-task-definition \
+--cli-input-json file://aws/ecs/scraper-task.json
+```
+
+---
+
+# SQS Queue
+
+Create queue:
+
+```
+aws sqs create-queue --queue-name pfr-player-urls
+```
+
+Example queue URL:
+
+```
+https://sqs.us-east-1.amazonaws.com/ACCOUNT/pfr-player-urls
+```
+
+---
+
+# S3 Storage
+
+Create bucket:
+
+```
+aws s3 mb s3://pfr-scraped-data
+```
+
+Output files stored as:
 
 ```
 players/<player_id>.json
@@ -119,4 +208,94 @@ Example:
 ```
 players/BradTo00.json
 ```
+
+---
+
+# Worker Environment Variables
+
+Configure in ECS task definition.
+
+```
+SQS_QUEUE_URL=<queue_url>
+S3_BUCKET=<bucket_name>
+AWS_REGION=<region>
+FLARESOLVERR_URL=http://flaresolverr:8191/v1
+```
+
+---
+
+# Queue Player URLs
+
+Helper script:
+
+```
+enqueue_players.py
+```
+
+Usage:
+
+```
+cat player_urls.txt | python enqueue_players.py $SQS_QUEUE_URL
+```
+
+Example file:
+
+```
+https://www.pro-football-reference.com/players/B/BradTo00.htm
+https://www.pro-football-reference.com/players/M/MahoPa00.htm
+```
+
+---
+
+# Scaling Strategy
+
+Recommended configuration:
+
+FlareSolverr containers:
+
+```
+3–10 instances
+```
+
+Scraper workers:
+
+```
+20–200 workers
+```
+
+Workers randomly connect to FlareSolverr endpoints to avoid Cloudflare throttling.
+
+---
+
+# Future Improvements
+
+Recommended upgrades for a full production data pipeline:
+
+• Automatic player discovery crawler
+• Terraform infrastructure deployment
+• Multi‑FlareSolverr load balancing
+• Postgres warehouse for analytics
+• Game log scraping
+• Historical season scraping
+• EventBridge scheduling
+
+---
+
+# Example Full Pipeline
+
+Crawler
+↓
+SQS Player URL Queue
+↓
+ECS Fargate Workers
+↓
+FlareSolverr Pool
+↓
+S3 Data Lake
+
+---
+
+# License
+
+MIT
 
