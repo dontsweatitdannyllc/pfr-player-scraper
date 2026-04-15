@@ -1,0 +1,20 @@
+{
+  "family": "pfr-scraper",
+  "networkMode": "awsvpc",
+  "requiresCompatibilities": ["FARGATE"],
+  "cpu": "512",
+  "memory": "1024",
+  "containerDefinitions": [
+    {
+      "name": "scraper",
+      "image": "<ACCOUNT_ID>.dkr.ecr.<REGION>.amazonaws.com/pfr-scraper:latest",
+      "essential": true,
+      "environment": [
+        {
+          "name": "FLARESOLVERR_URL",
+          "value": "http://flaresolverr:8191/v1"
+        }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,20 @@
+{
+  "family": "flaresolverr",
+  "networkMode": "awsvpc",
+  "requiresCompatibilities": ["FARGATE"],
+  "cpu": "512",
+  "memory": "1024",
+  "containerDefinitions": [
+    {
+      "name": "flaresolverr",
+      "image": "ghcr.io/flaresolverr/flaresolverr:latest",
+      "essential": true,
+      "portMappings": [
+        {
+          "containerPort": 8191,
+          "protocol": "tcp"
+        }
+      ]
+    }
+  ]
+}

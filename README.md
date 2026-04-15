@@ -45,3 +45,35 @@ Recommended:
 - Docker for FlareSolverr
 - Python service for scraping
 
+
+## AWS Fargate Deployment
+
+1. Build image
+```
+docker build -t pfr-scraper .
+```
+
+2. Push to ECR
+```
+aws ecr create-repository --repository-name pfr-scraper
+
+aws ecr get-login-password --region <region> |
+  docker login --username AWS --password-stdin <account>.dkr.ecr.<region>.amazonaws.com
+
+
+docker tag pfr-scraper:latest <account>.dkr.ecr.<region>.amazonaws.com/pfr-scraper:latest
+
+docker push <account>.dkr.ecr.<region>.amazonaws.com/pfr-scraper:latest
+```
+
+3. Register ECS tasks
+```
+aws ecs register-task-definition --cli-input-json file://aws/ecs/flaresolverr-task.json
+aws ecs register-task-definition --cli-input-json file://aws/ecs/scraper-task.json
+```
+
+4. Run workers
+```
+aws ecs run-task --cluster scraper-cluster --launch-type FARGATE --task-definition pfr-scraper
+```
+
