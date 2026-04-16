@@ -2,7 +2,7 @@ import os
 import json
 import time
 import boto3
-from scraper import scrape_player, fetch_page, parse_tables
+from scraper import fetch_page, parse_page
 
 SQS_URL = os.environ.get("SQS_QUEUE_URL")
 S3_BUCKET = os.environ.get("S3_BUCKET")
@@ -11,13 +11,14 @@ AWS_REGION = os.environ.get("AWS_REGION", "us-east-1")
 sqs = boto3.client("sqs", region_name=AWS_REGION)
 s3 = boto3.client("s3", region_name=AWS_REGION)
 
+
 def process_message(msg):
     url = msg["Body"]
 
     html = fetch_page(url)
-    data = parse_tables(html)
+    data = parse_page(html, url)
 
-    player_id = url.split("/")[-1].replace(".htm","")
+    player_id = data.get("player_id")
 
     key = f"players/{player_id}.json"
 
