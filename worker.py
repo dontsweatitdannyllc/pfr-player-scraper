@@ -1,6 +1,7 @@
 import os
 import json
 import time
+import random
 import boto3
 from scraper import fetch_page, parse_page
 
@@ -36,7 +37,7 @@ def loop():
     while True:
         resp = sqs.receive_message(
             QueueUrl=SQS_URL,
-            MaxNumberOfMessages=5,
+            MaxNumberOfMessages=2,
             WaitTimeSeconds=10
         )
 
@@ -54,7 +55,7 @@ def loop():
             except Exception as e:
                 print("error", e)
 
-        time.sleep(1)
+        time.sleep(random.uniform(0.5,2.0))
 
 
 if __name__ == "__main__":
