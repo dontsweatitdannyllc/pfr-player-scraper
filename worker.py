@@ -19,7 +19,7 @@ def process_message(msg):
 
     html = fetch_page(url)
 
-    if "sports-reference.com/cfb" in url:
+    if "/cfb/players/" in url:
         data = parse_cfb_page(html, url)
         slug = data.get("player_id")
         key = f"college/{slug}.json"
