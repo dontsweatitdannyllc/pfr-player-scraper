@@ -470,3 +470,21 @@ Recommended concurrency:
 ```
 
 Running too many concurrent workers against a single FlareSolverr instance can cause Chrome timeouts.
+
+
+## Recommended Local FlareSolverr Setup
+
+Run FlareSolverr with media disabled (much faster for PFR):
+
+```
+docker run -d \
+ --name flaresolverr \
+ -p 8191:8191 \
+ -e LOG_LEVEL=info \
+ -e DISABLE_MEDIA=true \
+ --restart unless-stopped \
+ ghcr.io/flaresolverr/flaresolverr:latest
+```
+
+This disables images, fonts, and other heavy resources inside the browser which significantly speeds up navigation while still allowing Cloudflare challenges to execute.
+
