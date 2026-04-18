@@ -5,7 +5,10 @@ from bs4 import BeautifulSoup
 # reuse the existing FlareSolverr fetcher from scraper.py
 from scraper import fetch_page
 
-URL = "https://www.scoresandodds.com/mlb/consensus-picks"
+import sys
+
+sport = sys.argv[1] if len(sys.argv) > 1 else "mlb"
+URL = f"https://www.scoresandodds.com/{sport}/consensus-picks"
 
 
 def parse_consensus(html):
@@ -40,10 +43,12 @@ def scrape():
     html = fetch_page(URL)
     data = parse_consensus(html)
 
-    with open("scoresandodds_mlb_consensus.json", "w") as f:
+    output_file = f"scoresandodds_{sport}_consensus.json"
+
+    with open(output_file, "w") as f:
         json.dump(data, f, indent=2)
 
-    print(f"Scraped {len(data)} games")
+    print(f"Scraped {len(data)} games for {sport} -> {output_file}")
 
 
 if __name__ == "__main__":
